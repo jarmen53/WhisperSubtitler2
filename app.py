@@ -2,6 +2,9 @@ import os
 import logging
 import tempfile
 import uuid
+import threading
+import time
+from datetime import datetime, timedelta
 from flask import Flask, render_template, request, redirect, url_for, flash, session, send_file
 from werkzeug.utils import secure_filename
 import whisper_subtitler
@@ -15,10 +18,58 @@ app = Flask(__name__)
 app.secret_key = os.environ.get("SESSION_SECRET", "default_secret_key")
 
 # Configure upload settings
-UPLOAD_FOLDER = tempfile.gettempdir()
+UPLOAD_FOLDER = os.path.join(tempfile.gettempdir(), 'whisper_subtitler_uploads')
+RESULTS_FOLDER = os.path.join(tempfile.gettempdir(), 'whisper_subtitler_results')
 ALLOWED_EXTENSIONS = {'mp3', 'mp4', 'wav', 'avi', 'mov', 'mkv', 'flac', 'ogg', 'm4a'}
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+app.config['RESULTS_FOLDER'] = RESULTS_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = 512 * 1024 * 1024  # 512MB max upload size
+
+# Create folders if they don't exist
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+os.makedirs(RESULTS_FOLDER, exist_ok=True)
+
+# File cleanup settings
+FILE_RETENTION_HOURS = 24  # Keep files for 24 hours
+cleanup_lock = threading.Lock()
+
+# Start a background thread to periodically clean up old files
+def cleanup_old_files():
+    """Remove files older than FILE_RETENTION_HOURS."""
+    while True:
+        try:
+            with cleanup_lock:
+                logger.info("Running scheduled file cleanup")
+                cutoff_time = datetime.now() - timedelta(hours=FILE_RETENTION_HOURS)
+                
+                # Clean upload folder
+                for filename in os.listdir(app.config['UPLOAD_FOLDER']):
+                    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                    file_modified = datetime.fromtimestamp(os.path.getmtime(filepath))
+                    if file_modified < cutoff_time:
+                        try:
+                            if os.path.isfile(filepath):
+                                os.remove(filepath)
+                                logger.info(f"Removed old upload file: {filepath}")
+                        except Exception as e:
+                            logger.error(f"Error removing file {filepath}: {str(e)}")
+                
+                # Clean results folder
+                for filename in os.listdir(app.config['RESULTS_FOLDER']):
+                    filepath = os.path.join(app.config['RESULTS_FOLDER'], filename)
+                    file_modified = datetime.fromtimestamp(os.path.getmtime(filepath))
+                    if file_modified < cutoff_time:
+                        try:
+                            if os.path.isfile(filepath):
+                                os.remove(filepath)
+                                logger.info(f"Removed old result file: {filepath}")
+                        except Exception as e:
+                            logger.error(f"Error removing file {filepath}: {str(e)}")
+        except Exception as e:
+            logger.error(f"Error in cleanup thread: {str(e)}")
+        
+        # Sleep for 1 hour before next cleanup
+        time.sleep(3600)
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
@@ -39,10 +90,11 @@ def upload_file():
         return redirect(request.url)
     
     if file and allowed_file(file.filename):
-        # Generate a unique filename to prevent collisions
+        # Generate unique IDs for this session and files
+        session_id = str(uuid.uuid4())
         original_filename = secure_filename(file.filename)
         file_extension = original_filename.rsplit('.', 1)[1].lower()
-        unique_filename = f"{uuid.uuid4()}.{file_extension}"
+        unique_filename = f"{session_id}_{original_filename}"
         filepath = os.path.join(app.config['UPLOAD_FOLDER'], unique_filename)
         
         file.save(filepath)
@@ -53,19 +105,37 @@ def upload_file():
         model = request.form.get('model', 'base')
         format_type = request.form.get('format', 'srt')
         
+        # Create a unique result filename
+        result_filename = f"{session_id}_{original_filename.rsplit('.', 1)[0]}.{format_type}"
+        result_path = os.path.join(app.config['RESULTS_FOLDER'], result_filename)
+        
         try:
             # Process the file with WhisperSubtitler
-            result_path = whisper_subtitler.process_file(
+            # The process_file function saves to a temporary location, 
+            # so we'll move the result to our organized results folder
+            temp_result_path = whisper_subtitler.process_file(
                 filepath, 
                 language=language,
                 model=model,
                 format_type=format_type
             )
             
+            # Copy the result to our results folder with the session-specific name
+            with open(temp_result_path, 'rb') as src_file, open(result_path, 'wb') as dest_file:
+                dest_file.write(src_file.read())
+            
+            # Try to remove the temporary file
+            try:
+                if os.path.exists(temp_result_path):
+                    os.remove(temp_result_path)
+            except Exception as e:
+                logger.warning(f"Could not remove temp file {temp_result_path}: {str(e)}")
+            
             # Store result information in session for download
             session['result_path'] = result_path
             session['original_filename'] = original_filename.rsplit('.', 1)[0]
             session['format_type'] = format_type
+            session['session_id'] = session_id
             
             flash('File processed successfully!', 'success')
             return redirect(url_for('results'))
@@ -73,6 +143,14 @@ def upload_file():
         except Exception as e:
             logger.error(f"Error processing file: {str(e)}")
             flash(f"Error processing file: {str(e)}", 'danger')
+            
+            # Clean up the uploaded file if processing failed
+            try:
+                if os.path.exists(filepath):
+                    os.remove(filepath)
+            except Exception as cleanup_error:
+                logger.warning(f"Could not remove upload file after error: {str(cleanup_error)}")
+                
             return redirect(url_for('index'))
     else:
         flash(f'File type not allowed. Allowed types: {", ".join(ALLOWED_EXTENSIONS)}', 'danger')
@@ -115,15 +193,33 @@ def download_result():
 
 @app.route('/clear')
 def clear_session():
-    # Clear any temporary files
-    if 'result_path' in session and os.path.exists(session['result_path']):
+    # Clear any temporary files associated with this user's session
+    result_path = session.get('result_path')
+    session_id = session.get('session_id')
+    
+    if result_path and os.path.exists(result_path):
         try:
-            os.remove(session['result_path'])
+            os.remove(result_path)
+            logger.info(f"Removed result file: {result_path}")
         except Exception as e:
-            logger.error(f"Error removing temporary file: {str(e)}")
+            logger.error(f"Error removing result file: {str(e)}")
+    
+    # Try to remove any uploaded files from this session
+    if session_id:
+        try:
+            # Look for files with the session_id prefix in the upload folder
+            for filename in os.listdir(app.config['UPLOAD_FOLDER']):
+                if filename.startswith(session_id):
+                    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                    if os.path.isfile(filepath):
+                        os.remove(filepath)
+                        logger.info(f"Removed upload file: {filepath}")
+        except Exception as e:
+            logger.error(f"Error removing session files: {str(e)}")
     
     # Clear session data
     session.clear()
+    flash('Session cleared successfully', 'info')
     return redirect(url_for('index'))
 
 @app.errorhandler(413)
@@ -135,3 +231,12 @@ def request_entity_too_large(error):
 def server_error(error):
     flash('Server error occurred. Please try again later.', 'danger')
     return redirect(url_for('index')), 500
+
+# Start the background cleanup thread when the application starts
+cleanup_thread = threading.Thread(target=cleanup_old_files, daemon=True)
+cleanup_thread.start()
+
+# Enable session cookie security for multi-user support
+app.config['SESSION_COOKIE_SECURE'] = True
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=24)
