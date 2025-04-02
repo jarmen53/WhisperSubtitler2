@@ -1,0 +1,71 @@
+/* Custom styling */
+.subtitle-preview {
+    max-height: 300px;
+    overflow-y: auto;
+    font-family: monospace;
+}
+
+/* File upload styling */
+.custom-file-input::-webkit-file-upload-button {
+    visibility: hidden;
+}
+
+/* Card hover effects */
+.card:hover {
+    box-shadow: 0 0.5rem 1rem rgba(0, 123, 255, 0.3) !important;
+    transition: all 0.3s ease;
+}
+
+/* Progress bar */
+.progress {
+    height: 10px;
+    border-radius: 5px;
+}
+
+/* Larger icons for feature cards */
+.feature-icon {
+    font-size: 48px;
+    color: var(--bs-primary);
+}
+
+/* Add some padding to the main container */
+main.container {
+    padding-top: 2rem;
+    padding-bottom: 2rem;
+}
+
+/* Custom background for the header section */
+.jumbotron {
+    background-color: var(--bs-dark);
+    border-radius: 0.5rem;
+    padding: 2rem;
+}
+
+/* Adjust modal size */
+@media (min-width: 576px) {
+    .modal-dialog {
+        max-width: 500px;
+    }
+}
+
+/* Style for the loading spinner */
+.spinner-border.text-primary {
+    color: var(--bs-primary) !important;
+}
+
+/* Make buttons more prominent */
+.btn-lg {
+    padding: 0.75rem 1.5rem;
+    font-size: 1.1rem;
+}
+
+/* Custom styling for the file input */
+.form-control[type="file"] {
+    padding: 0.375rem 0.75rem;
+}
+
+/* Ensure consistent pre formatting */
+pre {
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
