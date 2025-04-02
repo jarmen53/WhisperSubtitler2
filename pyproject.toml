@@ -16,6 +16,9 @@ dependencies = [
     "whisper>=1.1.10",
 ]
 
+# Keep dependencies minimal and use CPU-only versions where possible
+# Use Gunicorn for production-ready WSGI server
+
 [[tool.uv.index]]
 explicit = true
 name = "pytorch-cpu"
