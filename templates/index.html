@@ -3,34 +3,57 @@
 {% block content %}
 <div class="row justify-content-center">
     <div class="col-md-10">
+        <!-- Hero Section -->
+        <div class="card hero-card mb-4">
+            <div class="card-body text-center py-5">
+                <h1 class="display-5 fw-bold mb-3">Generate Accurate Subtitles</h1>
+                <p class="lead mb-4">
+                    Transform your audio and video with AI-powered transcription using OpenAI's Whisper technology
+                </p>
+                <div class="d-flex justify-content-center">
+                    <span class="badge rounded-pill bg-primary text-white px-3 py-2 me-2">
+                        <i class="fas fa-magic me-1"></i> AI Powered
+                    </span>
+                    <span class="badge rounded-pill bg-success text-white px-3 py-2 me-2">
+                        <i class="fas fa-language me-1"></i> Multilingual
+                    </span>
+                    <span class="badge rounded-pill bg-info text-white px-3 py-2">
+                        <i class="fas fa-bolt me-1"></i> Fast Processing
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Upload Form -->
         <div class="card shadow-lg mb-4">
-            <div class="card-header bg-primary text-white">
-                <h1 class="h3 mb-0">Generate Subtitles from Audio/Video</h1>
+            <div class="card-header bg-primary text-white d-flex align-items-center">
+                <i class="fas fa-file-upload me-2 fs-4"></i>
+                <h2 class="h4 mb-0">Upload Your File</h2>
             </div>
             <div class="card-body">
-                <div class="row mb-4">
-                    <div class="col-md-12">
-                        <p class="lead">
-                            Upload your audio or video file and Whisper Subtitler will generate accurate subtitles.
-                        </p>
-                        <div class="alert alert-info">
-                            <i class="fas fa-info-circle me-2"></i>
-                            Supported file formats: MP3, MP4, WAV, AVI, MOV, MKV, FLAC, OGG, M4A
-                        </div>
+                <div class="alert alert-info d-flex align-items-center mb-4">
+                    <i class="fas fa-info-circle fs-4 me-3"></i>
+                    <div>
+                        <strong>Supported formats:</strong> MP3, MP4, WAV, AVI, MOV, MKV, FLAC, OGG, M4A
+                        <br>
+                        <span class="small">Maximum file size: 512MB</span>
                     </div>
                 </div>
 
                 <form action="{{ url_for('upload_file') }}" method="post" enctype="multipart/form-data" id="uploadForm">
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
+                    <div class="row g-4">
+                        <div class="col-md-12 mb-3">
                             <div class="form-group">
-                                <label for="file" class="form-label">Choose Audio/Video File</label>
-                                <input type="file" class="form-control" id="file" name="file" required>
+                                <label for="file" class="form-label fw-bold mb-2">Select Media File</label>
+                                <input type="file" class="form-control form-control-lg" id="file" name="file" required>
                             </div>
                         </div>
-                        <div class="col-md-6 mb-3">
+                        
+                        <div class="col-md-4 mb-3">
                             <div class="form-group">
-                                <label for="language" class="form-label">Language</label>
+                                <label for="language" class="form-label fw-bold mb-2">
+                                    <i class="fas fa-globe-americas me-1"></i> Language
+                                </label>
                                 <select class="form-select" id="language" name="language">
                                     <option value="auto" selected>Auto-detect</option>
                                     <option value="en">English</option>
@@ -50,12 +73,12 @@
                                 </select>
                             </div>
                         </div>
-                    </div>
-
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
+                        
+                        <div class="col-md-4 mb-3">
                             <div class="form-group">
-                                <label for="model" class="form-label">Model Size</label>
+                                <label for="model" class="form-label fw-bold mb-2">
+                                    <i class="fas fa-microchip me-1"></i> Model Size
+                                </label>
                                 <select class="form-select" id="model" name="model">
                                     <option value="tiny" title="Fastest, less accurate">Tiny (fastest)</option>
                                     <option value="base" selected title="Good balance between speed and accuracy">Base (recommended)</option>
@@ -63,26 +86,29 @@
                                     <option value="medium" title="Very accurate, slow">Medium</option>
                                     <option value="large" title="Most accurate, slowest">Large</option>
                                 </select>
-                                <div class="form-text mt-1">
+                                <div class="form-text mt-2 small">
                                     <i class="fas fa-info-circle"></i> Larger models are more accurate but take longer to process
                                 </div>
                             </div>
                         </div>
-                        <div class="col-md-6 mb-3">
+                        
+                        <div class="col-md-4 mb-3">
                             <div class="form-group">
-                                <label for="format" class="form-label">Subtitle Format</label>
+                                <label for="format" class="form-label fw-bold mb-2">
+                                    <i class="fas fa-file-code me-1"></i> Output Format
+                                </label>
                                 <select class="form-select" id="format" name="format">
-                                    <option value="srt" selected>SRT</option>
-                                    <option value="vtt">VTT (Web Video Text Tracks)</option>
+                                    <option value="srt" selected>SRT (SubRip)</option>
+                                    <option value="vtt">VTT (Web Video)</option>
                                     <option value="txt">Plain Text</option>
                                 </select>
                             </div>
                         </div>
                     </div>
 
-                    <div class="row">
-                        <div class="col-12 mt-3">
-                            <button type="submit" class="btn btn-primary btn-lg w-100" id="submitBtn">
+                    <div class="row mt-4">
+                        <div class="col-12">
+                            <button type="submit" class="btn btn-primary btn-lg w-100 py-3" id="submitBtn">
                                 <i class="fas fa-closed-captioning me-2"></i>Generate Subtitles
                             </button>
                         </div>
@@ -91,31 +117,39 @@
             </div>
         </div>
 
+        <!-- How It Works Section -->
         <div class="card shadow-lg">
-            <div class="card-header bg-secondary text-white">
+            <div class="card-header bg-secondary text-white d-flex align-items-center">
+                <i class="fas fa-question-circle me-2 fs-4"></i>
                 <h2 class="h4 mb-0">How It Works</h2>
             </div>
-            <div class="card-body">
-                <div class="row">
-                    <div class="col-md-4 text-center mb-3 mb-md-0">
-                        <div class="p-3">
-                            <i class="fas fa-upload fa-3x mb-3 text-primary"></i>
-                            <h3 class="h5">1. Upload</h3>
-                            <p>Upload your audio or video file</p>
+            <div class="card-body py-4">
+                <div class="row g-4">
+                    <div class="col-md-4 text-center mb-4 mb-md-0">
+                        <div class="p-3 h-100 d-flex flex-column">
+                            <div class="feature-icon">
+                                <i class="fas fa-upload"></i>
+                            </div>
+                            <h3 class="h5 fw-bold">1. Upload</h3>
+                            <p class="text-muted">Select and upload your audio or video file</p>
                         </div>
                     </div>
-                    <div class="col-md-4 text-center mb-3 mb-md-0">
-                        <div class="p-3">
-                            <i class="fas fa-cogs fa-3x mb-3 text-primary"></i>
-                            <h3 class="h5">2. Process</h3>
-                            <p>Our system transcribes the audio using Whisper AI</p>
+                    <div class="col-md-4 text-center mb-4 mb-md-0">
+                        <div class="p-3 h-100 d-flex flex-column">
+                            <div class="feature-icon">
+                                <i class="fas fa-cogs"></i>
+                            </div>
+                            <h3 class="h5 fw-bold">2. Process</h3>
+                            <p class="text-muted">Our system transcribes the audio using Whisper AI</p>
                         </div>
                     </div>
                     <div class="col-md-4 text-center">
-                        <div class="p-3">
-                            <i class="fas fa-download fa-3x mb-3 text-primary"></i>
-                            <h3 class="h5">3. Download</h3>
-                            <p>Download your subtitle file</p>
+                        <div class="p-3 h-100 d-flex flex-column">
+                            <div class="feature-icon">
+                                <i class="fas fa-download"></i>
+                            </div>
+                            <h3 class="h5 fw-bold">3. Download</h3>
+                            <p class="text-muted">Download your ready-to-use subtitle file</p>
                         </div>
                     </div>
                 </div>
@@ -129,11 +163,14 @@
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-body text-center p-5">
-                <div class="spinner-border text-primary mb-3" role="status" style="width: 3rem; height: 3rem;">
+                <div class="spinner-border text-primary mb-4" role="status">
                     <span class="visually-hidden">Loading...</span>
                 </div>
-                <h4>Processing your file...</h4>
-                <p class="mb-0">This may take a few minutes depending on file size and model selected.</p>
+                <h4 class="mb-3">Processing your file...</h4>
+                <div class="progress mb-4">
+                    <div class="progress-bar progress-bar-striped progress-bar-animated bg-primary" role="progressbar" style="width: 100%"></div>
+                </div>
+                <p class="mb-0 text-muted">This may take a few minutes depending on file size and model selected.</p>
             </div>
         </div>
     </div>
