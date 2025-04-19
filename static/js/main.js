@@ -1,207 +1,336 @@
 document.addEventListener('DOMContentLoaded', function() {
-    // Form submission handling
+    // Process form submission with Gofile and API task creation
     const uploadForm = document.getElementById('uploadForm');
-    const submitBtn = document.getElementById('submitBtn');
-    const processingModal = new bootstrap.Modal(document.getElementById('processingModal'), {
-        keyboard: false,
-        backdrop: 'static'
-    });
-    
     if (uploadForm) {
-        uploadForm.addEventListener('submit', function(event) {
-            // Validate file input
+        uploadForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
             const fileInput = document.getElementById('file');
+            const languageSelect = document.getElementById('language');
+            const modelSelect = document.getElementById('model');
+            const formatSelect = document.getElementById('format');
+            const submitBtn = document.getElementById('submitBtn');
+            
+            // Validate file
             if (!fileInput.files || fileInput.files.length === 0) {
-                event.preventDefault();
-                
-                // Create and show alert instead of using the alert() function
-                showFeedback('Please select a file to upload.', 'danger');
-                
-                // Add invalid feedback to the file input
-                fileInput.classList.add('is-invalid');
-                addInvalidFeedback(fileInput, 'Please select a file to upload.');
-                
+                showFeedback('Please select a file', 'danger');
                 return;
             }
             
-            // Validate file size (max 512MB)
-            const maxSize = 512 * 1024 * 1024; // 512MB
-            if (fileInput.files[0].size > maxSize) {
-                event.preventDefault();
-                
-                // Create and show alert
-                showFeedback('File is too large. Maximum file size is 512MB.', 'danger');
-                
-                // Add invalid feedback to the file input
-                fileInput.classList.add('is-invalid');
-                addInvalidFeedback(fileInput, 'File is too large. Maximum file size is 512MB.');
-                
+            const file = fileInput.files[0];
+            const allowedExtensions = ['mp3', 'mp4', 'wav', 'avi', 'mov', 'mkv', 'flac', 'ogg', 'm4a'];
+            const extension = file.name.split('.').pop().toLowerCase();
+            
+            if (!allowedExtensions.includes(extension)) {
+                showFeedback(`File type not allowed. Allowed types: ${allowedExtensions.join(', ')}`, 'danger');
                 return;
             }
             
-            // Validate file type
-            const fileName = fileInput.files[0].name;
-            const fileExt = fileName.split('.').pop().toLowerCase();
-            const allowedTypes = ['mp3', 'mp4', 'wav', 'avi', 'mov', 'mkv', 'flac', 'ogg', 'm4a'];
-            
-            if (!allowedTypes.includes(fileExt)) {
-                event.preventDefault();
-                
-                // Create and show alert
-                showFeedback('Invalid file type. Allowed types: ' + allowedTypes.join(', '), 'danger');
-                
-                // Add invalid feedback to the file input
-                fileInput.classList.add('is-invalid');
-                addInvalidFeedback(fileInput, 'Invalid file type. Allowed types: ' + allowedTypes.join(', '));
-                
-                return;
-            }
-            
-            // Show processing modal
+            // Show processing dialog
+            const processingModal = new bootstrap.Modal(document.getElementById('processingModal'));
             processingModal.show();
             
-            // Disable submit button to prevent multiple submissions
-            submitBtn.disabled = true;
-            submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Processing...';
-        });
-    }
-    
-    // File input change handler - show filename and validate
-    const fileInput = document.getElementById('file');
-    if (fileInput) {
-        fileInput.addEventListener('change', function() {
-            // Reset validation classes
-            fileInput.classList.remove('is-invalid', 'is-valid');
-            removeInvalidFeedback(fileInput);
+            // Update modal status
+            const updateModalStatus = (message) => {
+                const statusElement = document.getElementById('processingStatus');
+                if (statusElement) {
+                    statusElement.textContent = message;
+                }
+            };
             
-            if (fileInput.files && fileInput.files.length > 0) {
-                const file = fileInput.files[0];
-                const fileName = file.name;
-                const fileExt = fileName.split('.').pop().toLowerCase();
-                const allowedTypes = ['mp3', 'mp4', 'wav', 'avi', 'mov', 'mkv', 'flac', 'ogg', 'm4a'];
+            try {
+                // 1. Get Gofile server
+                updateModalStatus('Getting upload server...');
+                const serverResponse = await fetch('/api/gofile/server');
+                const serverData = await serverResponse.json();
                 
-                // Validate file type
-                if (!allowedTypes.includes(fileExt)) {
-                    fileInput.classList.add('is-invalid');
-                    addInvalidFeedback(fileInput, 'Invalid file type. Allowed types: ' + allowedTypes.join(', '));
-                    return;
+                if (serverData.status !== 'success') {
+                    throw new Error('Failed to get Gofile server');
                 }
                 
-                // Validate file size
-                const maxSize = 512 * 1024 * 1024; // 512MB
-                if (file.size > maxSize) {
-                    fileInput.classList.add('is-invalid');
-                    addInvalidFeedback(fileInput, 'File is too large. Maximum file size is 512MB.');
-                    return;
+                const server = serverData.server;
+                
+                // 2. Upload file to Gofile
+                updateModalStatus('Uploading file to temporary storage...');
+                
+                const formData = new FormData();
+                formData.append('file', file);
+                
+                const uploadResponse = await fetch(`https://${server}.gofile.io/uploadFile`, {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const uploadData = await uploadResponse.json();
+                
+                if (uploadData.status !== 'ok') {
+                    throw new Error('Failed to upload file to Gofile');
                 }
                 
-                // File is valid
-                fileInput.classList.add('is-valid');
+                // 3. Create task for subtitle generation
+                updateModalStatus('Starting subtitle generation task...');
                 
-                // Optional: Display the selected filename
-                const fileLabel = fileInput.nextElementSibling;
-                if (fileLabel && fileLabel.classList.contains('form-file-label')) {
-                    fileLabel.textContent = fileName;
+                const taskData = {
+                    gofile_id: uploadData.data.fileId,
+                    gofile_link: uploadData.data.downloadPage,
+                    filename: file.name,
+                    language: languageSelect.value,
+                    model: modelSelect.value,
+                    format: formatSelect.value
+                };
+                
+                const taskResponse = await fetch('/api/task', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(taskData)
+                });
+                
+                const taskResult = await taskResponse.json();
+                
+                if (taskResult.status !== 'success') {
+                    throw new Error(taskResult.message || 'Failed to create task');
                 }
+                
+                // 4. Redirect to task status page
+                window.location.href = `/task/${taskResult.task_id}`;
+                
+            } catch (error) {
+                console.error('Error:', error);
+                processingModal.hide();
+                showFeedback(error.message || 'An error occurred during processing', 'danger');
             }
         });
     }
     
-    // Add card hover effects
-    const cards = document.querySelectorAll('.card');
-    cards.forEach(card => {
-        if (!card.classList.contains('hero-card')) {
-            card.addEventListener('mouseenter', function() {
-                this.style.transition = 'transform 0.3s ease, box-shadow 0.3s ease';
-                this.style.transform = 'translateY(-5px)';
-                this.style.boxShadow = '0 12px 28px rgba(0, 0, 0, 0.2)';
-            });
-            
-            card.addEventListener('mouseleave', function() {
-                this.style.transform = '';
-                this.style.boxShadow = '';
-            });
-        }
-    });
-    
-    // Add animation to feature icons
-    const featureIcons = document.querySelectorAll('.feature-icon');
-    featureIcons.forEach(icon => {
-        icon.addEventListener('mouseenter', function() {
-            this.style.transform = 'scale(1.1)';
-            this.style.transition = 'transform 0.3s ease';
-        });
+    // Task status checking
+    const taskStatusContainer = document.getElementById('taskStatus');
+    if (taskStatusContainer) {
+        const taskId = taskStatusContainer.dataset.taskId;
         
-        icon.addEventListener('mouseleave', function() {
-            this.style.transform = 'scale(1)';
-        });
-    });
-    
-    // Tooltips initialization
-    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-    tooltipTriggerList.map(function(tooltipTriggerEl) {
-        return new bootstrap.Tooltip(tooltipTriggerEl);
-    });
-    
-    // Auto-dismiss alerts after 5 seconds
-    const alerts = document.querySelectorAll('.alert:not(.alert-permanent)');
-    alerts.forEach(alert => {
-        setTimeout(() => {
-            // Check if the alert still exists in the DOM
-            if (document.body.contains(alert)) {
-                const bsAlert = new bootstrap.Alert(alert);
-                bsAlert.close();
-            }
-        }, 5000);
-    });
-    
-    // Helper function to create and display feedback messages
-    function showFeedback(message, type) {
-        // Create alert element
-        const alertDiv = document.createElement('div');
-        alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
-        alertDiv.role = 'alert';
-        
-        alertDiv.innerHTML = `
-            ${message}
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-        `;
-        
-        // Find the upload form to insert the alert before it
-        const targetElement = document.querySelector('.card-body');
-        if (targetElement) {
-            targetElement.insertBefore(alertDiv, targetElement.firstChild);
-            
-            // Auto-dismiss after 5 seconds
-            setTimeout(() => {
-                if (document.body.contains(alertDiv)) {
-                    const bsAlert = new bootstrap.Alert(alertDiv);
-                    bsAlert.close();
+        const checkTaskStatus = async () => {
+            try {
+                const response = await fetch(`/api/task/${taskId}`);
+                const data = await response.json();
+                
+                if (data.status !== 'success') {
+                    throw new Error(data.message || 'Failed to get task status');
                 }
-            }, 5000);
-        }
+                
+                const task = data.task;
+                
+                // Update UI based on task status
+                updateTaskUI(task);
+                
+                // If task is still in progress, check again after a delay
+                if (task.status === 'pending' || task.celery_status === 'STARTED' || 
+                    task.celery_status === 'PROCESSING' || task.celery_status === 'UPLOADING') {
+                    setTimeout(checkTaskStatus, 5000);
+                }
+                
+            } catch (error) {
+                console.error('Error checking task status:', error);
+                document.getElementById('statusMessage').textContent = 'Error checking task status';
+            }
+        };
+        
+        const updateTaskUI = (task) => {
+            const statusElement = document.getElementById('statusMessage');
+            const progressElement = document.getElementById('progressPercentage');
+            const resultLinkContainer = document.getElementById('resultLinkContainer');
+            const resultLink = document.getElementById('resultLink');
+            
+            // Update status message
+            if (task.status === 'completed') {
+                statusElement.textContent = 'Subtitles generated successfully!';
+                statusElement.className = 'text-success';
+                
+                // Show result link
+                if (resultLinkContainer && resultLink && task.subtitle_gofile_link) {
+                    resultLink.href = task.subtitle_gofile_link;
+                    resultLinkContainer.classList.remove('d-none');
+                }
+                
+                // Update progress
+                if (progressElement) {
+                    progressElement.style.width = '100%';
+                    progressElement.setAttribute('aria-valuenow', 100);
+                }
+                
+            } else if (task.status === 'failed') {
+                statusElement.textContent = `Error: ${task.message || 'Task failed'}`;
+                statusElement.className = 'text-danger';
+                
+                // Update progress to show error
+                if (progressElement) {
+                    progressElement.style.width = '100%';
+                    progressElement.classList.remove('bg-primary', 'bg-success');
+                    progressElement.classList.add('bg-danger');
+                }
+                
+            } else {
+                // Task in progress
+                let progressMessage = 'Processing...';
+                let progressPercent = 30;
+                
+                if (task.celery_status === 'STARTED') {
+                    progressMessage = 'Downloading file...';
+                    progressPercent = 20;
+                } else if (task.celery_status === 'PROCESSING') {
+                    progressMessage = 'Generating subtitles...';
+                    progressPercent = 60;
+                } else if (task.celery_status === 'UPLOADING') {
+                    progressMessage = 'Uploading subtitle file...';
+                    progressPercent = 80;
+                }
+                
+                if (task.progress) {
+                    progressMessage = task.progress;
+                }
+                
+                statusElement.textContent = progressMessage;
+                
+                // Update progress bar
+                if (progressElement) {
+                    progressElement.style.width = `${progressPercent}%`;
+                    progressElement.setAttribute('aria-valuenow', progressPercent);
+                }
+            }
+        };
+        
+        // Start checking status
+        checkTaskStatus();
     }
     
-    // Helper function to add invalid feedback to an input
-    function addInvalidFeedback(inputElement, message) {
-        // Remove any existing feedback
-        removeInvalidFeedback(inputElement);
+    // Tasks list page
+    const tasksListContainer = document.getElementById('tasksList');
+    if (tasksListContainer) {
+        const loadTasks = async () => {
+            try {
+                const response = await fetch('/api/my-tasks');
+                const data = await response.json();
+                
+                if (data.status !== 'success') {
+                    throw new Error(data.message || 'Failed to load tasks');
+                }
+                
+                renderTasksList(data.tasks);
+                
+            } catch (error) {
+                console.error('Error loading tasks:', error);
+                tasksListContainer.innerHTML = `
+                    <div class="alert alert-danger">
+                        Failed to load tasks: ${error.message || 'Unknown error'}
+                    </div>
+                `;
+            }
+        };
         
-        // Create feedback element
-        const feedbackDiv = document.createElement('div');
-        feedbackDiv.className = 'invalid-feedback';
-        feedbackDiv.innerText = message;
+        const renderTasksList = (tasks) => {
+            if (!tasks || tasks.length === 0) {
+                tasksListContainer.innerHTML = `
+                    <div class="alert alert-info">
+                        No subtitle generation tasks found.
+                    </div>
+                `;
+                return;
+            }
+            
+            let html = `
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>File</th>
+                                <th>Status</th>
+                                <th>Created</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+            `;
+            
+            for (const task of tasks) {
+                const statusClass = task.status === 'completed' ? 'text-success' : 
+                                    task.status === 'failed' ? 'text-danger' : 'text-warning';
+                                    
+                html += `
+                    <tr>
+                        <td>${task.original_filename}</td>
+                        <td><span class="${statusClass}">${task.status}</span></td>
+                        <td>${task.created_at}</td>
+                        <td>
+                            <a href="/task/${task.task_id}" class="btn btn-sm btn-primary">
+                                <i class="fas fa-eye"></i> View
+                            </a>
+                            ${task.status === 'completed' ? `
+                                <a href="${task.subtitle_gofile_link}" target="_blank" class="btn btn-sm btn-success">
+                                    <i class="fas fa-download"></i> Download
+                                </a>
+                            ` : ''}
+                        </td>
+                    </tr>
+                `;
+            }
+            
+            html += `
+                        </tbody>
+                    </table>
+                </div>
+            `;
+            
+            tasksListContainer.innerHTML = html;
+        };
         
-        // Insert after the input
-        inputElement.parentNode.appendChild(feedbackDiv);
-    }
-    
-    // Helper function to remove invalid feedback
-    function removeInvalidFeedback(inputElement) {
-        // Find any existing feedback
-        const existingFeedback = inputElement.parentNode.querySelector('.invalid-feedback');
-        if (existingFeedback) {
-            existingFeedback.remove();
-        }
+        // Load tasks
+        loadTasks();
     }
 });
+
+// Utility functions
+function showFeedback(message, type) {
+    const alertDiv = document.createElement('div');
+    alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+    alertDiv.role = 'alert';
+    
+    alertDiv.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    `;
+    
+    const container = document.querySelector('main.container');
+    if (container) {
+        container.insertBefore(alertDiv, container.firstChild);
+        
+        // Auto-dismiss after 5 seconds
+        setTimeout(() => {
+            const bsAlert = new bootstrap.Alert(alertDiv);
+            bsAlert.close();
+        }, 5000);
+    }
+}
+
+function addInvalidFeedback(inputElement, message) {
+    inputElement.classList.add('is-invalid');
+    
+    // Check if feedback element already exists
+    let feedbackElement = inputElement.nextElementSibling;
+    if (!feedbackElement || !feedbackElement.classList.contains('invalid-feedback')) {
+        feedbackElement = document.createElement('div');
+        feedbackElement.className = 'invalid-feedback';
+        inputElement.parentNode.insertBefore(feedbackElement, inputElement.nextSibling);
+    }
+    
+    feedbackElement.textContent = message;
+}
+
+function removeInvalidFeedback(inputElement) {
+    inputElement.classList.remove('is-invalid');
+    
+    // Remove any existing feedback
+    const feedbackElement = inputElement.nextElementSibling;
+    if (feedbackElement && feedbackElement.classList.contains('invalid-feedback')) {
+        feedbackElement.textContent = '';
+    }
+}

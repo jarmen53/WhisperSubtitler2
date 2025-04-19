@@ -394,6 +394,33 @@ def get_user_tasks():
 cleanup_thread = threading.Thread(target=cleanup_old_files, daemon=True)
 cleanup_thread.start()
 
+# Routes for task management
+@app.route('/task/<task_id>')
+def task_status(task_id):
+    """Display the status of a subtitle generation task."""
+    task = SubtitleTask.query.filter_by(task_id=task_id).first()
+    if not task:
+        flash('Task not found', 'danger')
+        return redirect(url_for('index'))
+    
+    # Check if task belongs to this session
+    if 'session_id' not in session:
+        session['session_id'] = str(uuid.uuid4())
+    
+    # Allow viewing the task even if it's from a different session
+    # This helps with sharing task results or accessing across different browsers
+    
+    return render_template('task_status.html', task_id=task_id)
+
+@app.route('/tasks')
+def tasks_list():
+    """Display a list of all tasks for the current user session."""
+    # Ensure we have a session ID
+    if 'session_id' not in session:
+        session['session_id'] = str(uuid.uuid4())
+    
+    return render_template('tasks_list.html')
+
 # Enable session cookie security for multi-user support
 app.config['SESSION_COOKIE_SECURE'] = True
 app.config['SESSION_COOKIE_HTTPONLY'] = True
