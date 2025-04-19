@@ -4,10 +4,13 @@ import tempfile
 import uuid
 import threading
 import time
+import json
 from datetime import datetime, timedelta
-from flask import Flask, render_template, request, redirect, url_for, flash, session, send_file
+from flask import Flask, render_template, request, redirect, url_for, flash, session, send_file, jsonify
 from werkzeug.utils import secure_filename
 import whisper_subtitler
+import requests
+from celery.result import AsyncResult
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
@@ -16,6 +19,15 @@ logger = logging.getLogger(__name__)
 # Create the app
 app = Flask(__name__)
 app.secret_key = os.environ.get("SESSION_SECRET", "default_secret_key")
+
+# SQLAlchemy Configuration
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///subtitles.db')
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+# Redis and Celery Configuration
+app.config['REDIS_URL'] = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
+app.config['CELERY_BROKER_URL'] = app.config['REDIS_URL']
+app.config['CELERY_RESULT_BACKEND'] = app.config['REDIS_URL']
 
 # Configure upload settings
 UPLOAD_FOLDER = os.path.join(tempfile.gettempdir(), 'whisper_subtitler_uploads')
@@ -28,6 +40,17 @@ app.config['MAX_CONTENT_LENGTH'] = 512 * 1024 * 1024  # 512MB max upload size
 # Create folders if they don't exist
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(RESULTS_FOLDER, exist_ok=True)
+
+# Initialize database
+from models import db, SubtitleTask
+db.init_app(app)
+
+# Connect to Celery worker
+from celery_worker import celery_app, process_subtitle_task, get_gofile_server
+
+# Create database tables if they don't exist
+with app.app_context():
+    db.create_all()
 
 # File cleanup settings
 FILE_RETENTION_HOURS = 24  # Keep files for 24 hours
@@ -231,6 +254,141 @@ def request_entity_too_large(error):
 def server_error(error):
     flash('Server error occurred. Please try again later.', 'danger')
     return redirect(url_for('index')), 500
+
+# API Endpoints for Gofile and Celery task management
+@app.route('/api/gofile/server', methods=['GET'])
+def get_server():
+    """Get the best Gofile server for uploading."""
+    server = get_gofile_server()
+    if server:
+        return jsonify({'status': 'success', 'server': server})
+    else:
+        return jsonify({'status': 'error', 'message': 'Failed to get Gofile server'}), 500
+
+@app.route('/api/task', methods=['POST'])
+def create_task():
+    """Create a new subtitle generation task with Gofile ID."""
+    try:
+        data = request.json
+        if not data:
+            return jsonify({'status': 'error', 'message': 'No JSON data provided'}), 400
+        
+        # Required fields
+        gofile_id = data.get('gofile_id')
+        gofile_link = data.get('gofile_link')
+        original_filename = data.get('filename')
+        
+        if not all([gofile_id, gofile_link, original_filename]):
+            return jsonify({
+                'status': 'error', 
+                'message': 'Missing required fields (gofile_id, gofile_link, filename)'
+            }), 400
+        
+        # Optional parameters with defaults
+        language = data.get('language', 'auto')
+        model = data.get('model', 'base')
+        format_type = data.get('format', 'srt')
+        
+        # Generate a unique session ID if not in session
+        if 'session_id' not in session:
+            session['session_id'] = str(uuid.uuid4())
+        
+        # Start Celery task
+        task = process_subtitle_task.delay(
+            gofile_id=gofile_id,
+            language=language,
+            model=model,
+            format_type=format_type
+        )
+        
+        # Store task information in database
+        subtitle_task = SubtitleTask(
+            task_id=task.id,
+            session_id=session['session_id'],
+            status='pending',
+            original_filename=original_filename,
+            input_gofile_id=gofile_id,
+            input_gofile_link=gofile_link,
+            language=language,
+            model=model,
+            format_type=format_type,
+            message='Task initiated'
+        )
+        
+        db.session.add(subtitle_task)
+        db.session.commit()
+        
+        return jsonify({
+            'status': 'success',
+            'task_id': task.id,
+            'message': 'Task created successfully'
+        })
+        
+    except Exception as e:
+        logger.error(f"Error creating task: {str(e)}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@app.route('/api/task/<task_id>', methods=['GET'])
+def get_task_status(task_id):
+    """Get the status of a subtitle generation task."""
+    try:
+        # Check database first
+        task_record = SubtitleTask.query.filter_by(task_id=task_id).first()
+        if not task_record:
+            return jsonify({'status': 'error', 'message': 'Task not found'}), 404
+        
+        # Check Celery task status
+        task_result = AsyncResult(task_id)
+        current_status = task_result.status
+        
+        # Update database record if needed
+        if current_status != task_record.status and current_status in ('SUCCESS', 'FAILURE'):
+            if current_status == 'SUCCESS':
+                result = task_result.get()
+                task_record.status = 'completed'
+                task_record.subtitle_gofile_id = result.get('subtitle_file_id')
+                task_record.subtitle_gofile_link = result.get('subtitle_download_link')
+                task_record.subtitle_filename = result.get('subtitle_file_name')
+                task_record.message = result.get('message', 'Subtitles generated successfully')
+                task_record.completed_at = datetime.utcnow()
+            else:
+                task_record.status = 'failed'
+                task_record.message = str(task_result.result)
+            
+            db.session.commit()
+        
+        # Return task details
+        task_info = task_record.to_dict()
+        task_info['celery_status'] = current_status
+        
+        if current_status in ('STARTED', 'PROCESSING', 'UPLOADING') and task_result.info:
+            task_info['progress'] = task_result.info.get('status', 'Processing')
+        
+        return jsonify({'status': 'success', 'task': task_info})
+        
+    except Exception as e:
+        logger.error(f"Error getting task status: {str(e)}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@app.route('/api/my-tasks', methods=['GET'])
+def get_user_tasks():
+    """Get all tasks for the current user session."""
+    try:
+        if 'session_id' not in session:
+            return jsonify({'status': 'error', 'message': 'No active session'}), 400
+            
+        tasks = SubtitleTask.query.filter_by(session_id=session['session_id']).order_by(
+            SubtitleTask.created_at.desc()
+        ).all()
+        
+        return jsonify({
+            'status': 'success',
+            'tasks': [task.to_dict() for task in tasks]
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting user tasks: {str(e)}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
 
 # Start the background cleanup thread when the application starts
 cleanup_thread = threading.Thread(target=cleanup_old_files, daemon=True)
