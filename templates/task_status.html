@@ -12,13 +12,65 @@
                 <div class="text-center mb-4">
                     <h3 id="statusMessage" class="h5 mb-3">Initializing task...</h3>
                     
+                    <!-- Detailed task progress stages -->
+                    <div class="row mb-4 text-center" id="taskStages">
+                        <div class="col-3 task-stage" id="stage-upload">
+                            <div class="stage-icon mb-2 rounded-circle mx-auto d-flex align-items-center justify-content-center">
+                                <i class="fas fa-upload"></i>
+                            </div>
+                            <div class="stage-label">Upload</div>
+                        </div>
+                        <div class="col-3 task-stage" id="stage-download">
+                            <div class="stage-icon mb-2 rounded-circle mx-auto d-flex align-items-center justify-content-center">
+                                <i class="fas fa-cloud-download-alt"></i>
+                            </div>
+                            <div class="stage-label">Preparing</div>
+                        </div>
+                        <div class="col-3 task-stage" id="stage-processing">
+                            <div class="stage-icon mb-2 rounded-circle mx-auto d-flex align-items-center justify-content-center">
+                                <i class="fas fa-cogs"></i>
+                            </div>
+                            <div class="stage-label">Transcribing</div>
+                        </div>
+                        <div class="col-3 task-stage" id="stage-completion">
+                            <div class="stage-icon mb-2 rounded-circle mx-auto d-flex align-items-center justify-content-center">
+                                <i class="fas fa-check"></i>
+                            </div>
+                            <div class="stage-label">Complete</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Progress bar -->
                     <div class="progress mb-4" style="height: 20px;">
                         <div id="progressPercentage" class="progress-bar progress-bar-striped progress-bar-animated" 
                              role="progressbar" style="width: 10%" aria-valuenow="10" aria-valuemin="0" aria-valuemax="100"></div>
                     </div>
                     
+                    <!-- Task details -->
+                    <div class="card my-4 text-start">
+                        <div class="card-body p-3">
+                            <h5 class="card-title h6 mb-3">Task Information</h5>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <p class="mb-2"><strong>File:</strong> <span id="taskFilename">Loading...</span></p>
+                                    <p class="mb-2"><strong>Language:</strong> <span id="taskLanguage">Loading...</span></p>
+                                </div>
+                                <div class="col-md-6">
+                                    <p class="mb-2"><strong>Model:</strong> <span id="taskModel">Loading...</span></p>
+                                    <p class="mb-2"><strong>Format:</strong> <span id="taskFormat">Loading...</span></p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Additional status info -->
+                    <div id="taskDetailedStatus" class="alert alert-primary">
+                        Connecting to server...
+                    </div>
+                    
+                    <!-- Result link -->
                     <div id="resultLinkContainer" class="d-none mt-4">
-                        <a id="resultLink" href="#" target="_blank" class="btn btn-success">
+                        <a id="resultLink" href="#" target="_blank" class="btn btn-success btn-lg">
                             <i class="fas fa-download me-2"></i> Download Subtitles
                         </a>
                     </div>

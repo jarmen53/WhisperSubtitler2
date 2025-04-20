@@ -140,11 +140,35 @@ document.addEventListener('DOMContentLoaded', function() {
             const progressElement = document.getElementById('progressPercentage');
             const resultLinkContainer = document.getElementById('resultLinkContainer');
             const resultLink = document.getElementById('resultLink');
+            const detailedStatus = document.getElementById('taskDetailedStatus');
             
-            // Update status message
+            // Update task information
+            document.getElementById('taskFilename').textContent = task.original_filename || 'Unknown';
+            document.getElementById('taskLanguage').textContent = task.language === 'auto' ? 'Auto-detect' : task.language;
+            document.getElementById('taskModel').textContent = capitalizeFirstLetter(task.model || 'base');
+            document.getElementById('taskFormat').textContent = (task.format_type || 'srt').toUpperCase();
+            
+            // Reset all stages
+            resetStages();
+            
+            // Update status message and UI based on status
             if (task.status === 'completed') {
                 statusElement.textContent = 'Subtitles generated successfully!';
                 statusElement.className = 'text-success';
+                
+                // Complete all stages
+                completeStage('upload');
+                completeStage('download');
+                completeStage('processing');
+                completeStage('completion');
+                
+                // Show detailed status
+                detailedStatus.className = 'alert alert-success';
+                detailedStatus.innerHTML = `
+                    <i class="fas fa-check-circle me-2"></i>
+                    Subtitles have been successfully generated and are ready for download.
+                    ${task.message ? `<p class="mb-0 mt-2 small">${task.message}</p>` : ''}
+                `;
                 
                 // Show result link
                 if (resultLinkContainer && resultLink && task.subtitle_gofile_link) {
@@ -154,6 +178,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 // Update progress
                 if (progressElement) {
+                    progressElement.className = 'progress-bar bg-success';
                     progressElement.style.width = '100%';
                     progressElement.setAttribute('aria-valuenow', 100);
                 }
@@ -161,6 +186,30 @@ document.addEventListener('DOMContentLoaded', function() {
             } else if (task.status === 'failed') {
                 statusElement.textContent = `Error: ${task.message || 'Task failed'}`;
                 statusElement.className = 'text-danger';
+                
+                // Mark stage as failed based on celery status
+                completeStage('upload');
+                
+                if (task.celery_status === 'STARTED') {
+                    failStage('download');
+                } else if (task.celery_status === 'PROCESSING') {
+                    completeStage('download');
+                    failStage('processing');
+                } else if (task.celery_status === 'UPLOADING') {
+                    completeStage('download');
+                    completeStage('processing');
+                    failStage('completion');
+                } else {
+                    failStage('download');
+                }
+                
+                // Show detailed status
+                detailedStatus.className = 'alert alert-danger';
+                detailedStatus.innerHTML = `
+                    <i class="fas fa-exclamation-circle me-2"></i>
+                    ${task.message || 'Task failed due to an error.'}
+                    <p class="mb-0 mt-2 small">Please try again or contact support if the problem persists.</p>
+                `;
                 
                 // Update progress to show error
                 if (progressElement) {
@@ -173,23 +222,49 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Task in progress
                 let progressMessage = 'Processing...';
                 let progressPercent = 30;
+                let detailedMessage = 'Your subtitle generation task is being processed...';
                 
-                if (task.celery_status === 'STARTED') {
+                // Complete initial stage
+                completeStage('upload');
+                
+                if (task.celery_status === 'PENDING') {
+                    progressMessage = 'Waiting in queue...';
+                    progressPercent = 10;
+                    detailedMessage = 'Your task is in the queue and will be processed shortly.';
+                    activateStage('download');
+                } else if (task.celery_status === 'STARTED') {
                     progressMessage = 'Downloading file...';
-                    progressPercent = 20;
+                    progressPercent = 25;
+                    detailedMessage = 'Downloading your media file for processing...';
+                    activateStage('download');
                 } else if (task.celery_status === 'PROCESSING') {
                     progressMessage = 'Generating subtitles...';
                     progressPercent = 60;
+                    detailedMessage = `Transcribing audio using the ${task.model || 'base'} model...`;
+                    completeStage('download');
+                    activateStage('processing');
                 } else if (task.celery_status === 'UPLOADING') {
                     progressMessage = 'Uploading subtitle file...';
-                    progressPercent = 80;
+                    progressPercent = 85;
+                    detailedMessage = 'Finalizing and uploading your subtitle file...';
+                    completeStage('download');
+                    completeStage('processing');
+                    activateStage('completion');
                 }
                 
+                // Use progress info if available
                 if (task.progress) {
                     progressMessage = task.progress;
                 }
                 
                 statusElement.textContent = progressMessage;
+                
+                // Update detailed status
+                detailedStatus.className = 'alert alert-primary';
+                detailedStatus.innerHTML = `
+                    <i class="fas fa-info-circle me-2"></i>
+                    ${detailedMessage}
+                `;
                 
                 // Update progress bar
                 if (progressElement) {
@@ -198,6 +273,40 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             }
         };
+        
+        // Helper functions for stage updates
+        function resetStages() {
+            document.querySelectorAll('.task-stage').forEach(stage => {
+                stage.classList.remove('active', 'completed', 'failed');
+            });
+        }
+        
+        function activateStage(stageId) {
+            const stage = document.getElementById(`stage-${stageId}`);
+            if (stage) {
+                stage.classList.add('active');
+            }
+        }
+        
+        function completeStage(stageId) {
+            const stage = document.getElementById(`stage-${stageId}`);
+            if (stage) {
+                stage.classList.remove('active', 'failed');
+                stage.classList.add('completed');
+            }
+        }
+        
+        function failStage(stageId) {
+            const stage = document.getElementById(`stage-${stageId}`);
+            if (stage) {
+                stage.classList.remove('active', 'completed');
+                stage.classList.add('failed');
+            }
+        }
+        
+        function capitalizeFirstLetter(string) {
+            return string.charAt(0).toUpperCase() + string.slice(1);
+        }
         
         // Start checking status
         checkTaskStatus();

@@ -1,190 +1,121 @@
-/* Custom styling */
-:root {
-    --card-border-radius: 12px;
-    --button-border-radius: 8px;
-    --input-border-radius: 6px;
+/* Custom styles for Whisper Subtitler */
+
+/* Hero section styling */
+.hero-card {
+    background: linear-gradient(to right, rgba(13, 110, 253, 0.05), rgba(13, 110, 253, 0.02));
+    border-color: rgba(13, 110, 253, 0.1);
 }
 
-body {
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+/* Feature icons in How It Works section */
+.feature-icon {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background-color: rgba(13, 110, 253, 0.1);
+    color: var(--bs-primary);
+    font-size: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 15px;
 }
 
-/* Modern card styling */
+/* Task status stages */
+.task-stage {
+    position: relative;
+}
+
+.task-stage:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    top: 25px;
+    right: -15px;
+    width: 30px;
+    height: 2px;
+    background-color: #dee2e6;
+    z-index: 1;
+}
+
+.stage-icon {
+    width: 50px;
+    height: 50px;
+    background-color: #e9ecef;
+    color: #6c757d;
+    font-size: 20px;
+    transition: all 0.3s;
+}
+
+.stage-label {
+    font-size: 0.85rem;
+    color: #6c757d;
+    transition: all 0.3s;
+}
+
+/* Active stage */
+.task-stage.active .stage-icon {
+    background-color: var(--bs-primary);
+    color: white;
+}
+
+.task-stage.active .stage-label {
+    color: var(--bs-primary);
+    font-weight: 600;
+}
+
+/* Completed stage */
+.task-stage.completed .stage-icon {
+    background-color: var(--bs-success);
+    color: white;
+}
+
+.task-stage.completed .stage-label {
+    color: var(--bs-success);
+}
+
+/* Failed stage */
+.task-stage.failed .stage-icon {
+    background-color: var(--bs-danger);
+    color: white;
+}
+
+.task-stage.failed .stage-label {
+    color: var(--bs-danger);
+}
+
+/* Progress animations */
+@keyframes pulse {
+    0% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.05);
+    }
+    100% {
+        transform: scale(1);
+    }
+}
+
+.task-stage.active .stage-icon {
+    animation: pulse 1.5s infinite;
+}
+
+/* Transition styles between stages */
+.task-stage.completed:not(:last-child)::after {
+    background-color: var(--bs-success);
+    height: 3px;
+}
+
+.task-stage.active:not(:last-child)::after {
+    background: linear-gradient(to right, var(--bs-success), #dee2e6);
+    height: 3px;
+}
+
+/* Additional polish */
 .card {
-    border-radius: var(--card-border-radius);
-    border: none;
+    border-radius: 10px;
     overflow: hidden;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
-    transition: transform 0.3s ease, box-shadow 0.3s ease;
-    margin-bottom: 2rem;
-}
-
-.card:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.2) !important;
 }
 
 .card-header {
     border-bottom: none;
-    padding: 1.25rem 1.5rem;
-}
-
-.card-body {
-    padding: 1.5rem;
-}
-
-/* Subtitle preview container */
-.subtitle-preview {
-    max-height: 300px;
-    overflow-y: auto;
-    font-family: 'Roboto Mono', monospace;
-    background-color: var(--bs-dark);
-    border-radius: var(--input-border-radius);
-    padding: 1rem;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-/* Form elements styling */
-.form-control, .form-select {
-    border-radius: var(--input-border-radius);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    background-color: rgba(255, 255, 255, 0.05);
-    padding: 0.75rem 1rem;
-    transition: all 0.3s ease;
-}
-
-.form-control:focus, .form-select:focus {
-    box-shadow: 0 0 0 0.25rem rgba(var(--bs-primary-rgb), 0.25);
-    background-color: rgba(255, 255, 255, 0.1);
-}
-
-.form-control[type="file"] {
-    padding: 0.6rem 1rem;
-}
-
-/* Button styling */
-.btn {
-    border-radius: var(--button-border-radius);
-    padding: 0.75rem 1.25rem;
-    transition: all 0.3s ease;
-    border: none;
-    font-weight: 500;
-}
-
-.btn-lg {
-    padding: 1rem 1.5rem;
-    font-size: 1.1rem;
-}
-
-.btn-primary {
-    box-shadow: 0 4px 10px rgba(var(--bs-primary-rgb), 0.4);
-}
-
-.btn-primary:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 15px rgba(var(--bs-primary-rgb), 0.5);
-}
-
-/* Progress bar */
-.progress {
-    height: 10px;
-    border-radius: 10px;
-    overflow: hidden;
-}
-
-/* How it works section */
-.feature-icon {
-    font-size: 3rem;
-    color: var(--bs-primary);
-    background: rgba(var(--bs-primary-rgb), 0.1);
-    width: 80px;
-    height: 80px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 50%;
-    margin: 0 auto 1.5rem;
-}
-
-/* Add some padding to the main container */
-main.container {
-    padding-top: 2.5rem;
-    padding-bottom: 2.5rem;
-}
-
-/* Navbar styling */
-.navbar {
-    padding: 1rem 0;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-}
-
-.navbar-brand {
-    font-weight: 700;
-    font-size: 1.4rem;
-}
-
-/* Brand icon styling */
-.brand-icon {
-    width: 38px;
-    height: 38px;
-    background-color: var(--bs-primary);
-    border-radius: 10px;
-    color: white;
-    font-size: 1.2rem;
-}
-
-/* Hero card styling */
-.hero-card {
-    background: linear-gradient(45deg, rgba(13, 110, 253, 0.05), rgba(13, 110, 253, 0.15));
-    border: none;
-}
-
-/* Modal styling */
-.modal-content {
-    border-radius: 16px;
-    border: none;
-    overflow: hidden;
-}
-
-.modal-body {
-    padding: 2rem;
-}
-
-@media (min-width: 576px) {
-    .modal-dialog {
-        max-width: 500px;
-    }
-}
-
-/* Spinner styling */
-.spinner-border.text-primary {
-    color: var(--bs-primary) !important;
-    width: 3.5rem;
-    height: 3.5rem;
-}
-
-/* Alerts styling */
-.alert {
-    border-radius: var(--card-border-radius);
-    border: none;
-    padding: 1rem 1.25rem;
-}
-
-/* Ensure consistent pre formatting */
-pre {
-    white-space: pre-wrap;
-    word-wrap: break-word;
-    margin-bottom: 0;
-}
-
-/* Footer styling */
-footer {
-    border-top: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-/* Responsive adjustments */
-@media (max-width: 768px) {
-    .card-body {
-        padding: 1.25rem;
-    }
 }
